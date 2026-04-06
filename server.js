@@ -8,61 +8,44 @@ require('dotenv').config();
 const app = express();
 const port = process.env.PORT || 3000;
 
+// CORRECTED DATABASE SETUP
+const client = new Client({
+    connectionString: process.env.DATABASE_URL, 
+    ssl: {
+        rejectUnauthorized: false 
+    }
+});
 
-const dbConfig = {
-    user: process.env.DB_USER,
-    host: process.env.DB_HOST,
-    database: process.env.DB_NAME,
-    password: process.env.DB_PASSWORD,
-    port: process.env.DB_PORT,
-};
-
-const client = new Client(dbConfig);
 client.connect()
     .then(() => console.log('Connected to PostgreSQL'))
     .catch(err => console.error('Connection error', err.stack));
 
-app.use(express.static('public')); // Serve frontend files
+app.use(express.static('public')); 
 app.use(express.json());
 app.use(cors());
 
 // THE SECURE API ROUTE
 app.post('/save', (req, res) => {
     const { filename, text } = req.body;
-
     if (!text || !filename) return res.status(400).json({ error: 'Missing data' });
 
-    // 1. Get the secret key from environment variables (Best Practice!)
-    // If not set, use a fallback (though in prod you'd want to fail hard)
     const secretKey = process.env.ENCRYPTION_KEY || "default_placement_key";
+    
+    // IMPORTANT: On Render (Linux), this must be a Linux binary, NOT a .exe
+    const program = path.join(__dirname, 'crypto.exe'); 
+    const args =;
 
-    // CHANGE: Use execFile for better security (avoids shell injection)
-    // Program name
-    const program = path.join(__dirname, 'crypto.exe');
-
-    // Arguments as an array: [text_to_encrypt, secret_key]
-    const args = ['encrypt', text, secretKey];
-
-    // 2. Run safely using execFile
     execFile(program, args, (error, stdout, stderr) => {
         if (error) {
             console.error("Execution Error:", stderr);
-            return res.status(500).json({ error: 'Encryption failed' });
+            return res.status(500).json({ error: 'Encryption failed - check if crypto.exe runs on Linux' });
         }
-
         const encryptedText = stdout.trim();
-
-        // 3. Save to Database
         const query = 'INSERT INTO secrets (original_filename, encrypted_content) VALUES ($1, $2) RETURNING *';
         const values = [filename, encryptedText];
 
         client.query(query, values)
-            .then(dbRes => {
-                res.json({
-                    message: 'Saved successfully!',
-                    data: dbRes.rows[0]
-                });
-            })
+            .then(dbRes => res.json({ message: 'Saved successfully!', data: dbRes.rows[0] }))
             .catch(e => {
                 console.error(e.stack);
                 res.status(500).json({ error: 'Database error' });
@@ -88,7 +71,6 @@ app.post('/decrypt', (req, res) => {
     client.query('SELECT encrypted_content FROM secrets WHERE id = $1', [id])
         .then(dbRes => {
             if (dbRes.rows.length === 0) return res.status(404).json({ error: 'Secret not found' });
-            
             const encryptedHex = dbRes.rows[0].encrypted_content;
             const secretKey = process.env.ENCRYPTION_KEY || "default_placement_key";
             
