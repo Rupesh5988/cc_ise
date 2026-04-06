@@ -1,42 +1,42 @@
-# Secure File Vault - Complete Code Explanation 📚
+# 🛡️ Secure File Vault - Complete Line-by-Line Architecture Explanation
 
-This document contains the **full source code** for every file in the project, followed by a detailed line-by-line explanation of how it works. This is perfect for understanding the flow and preparing for interview questions.
-
----
-
-## 🔄 Project Logic Flow
-1.  **Frontend (`index.html`)**: User enters text. Browser sends it via HTTP POST to the server.
-2.  **Backend (`server.js`)**: Node.js receives the text. It securely calls the C++ program using `child_process.execFile`.
-3.  **Security (`encrypt.cpp`)**: The C++ program uses an **XOR Cipher** with a secret key to encrypt the text and converts it to **Hexadecimal** format for safety.
-4.  **Database**: The encrypted hex string is stored in PostgreSQL.
-5.  **Response**: The server sends the encrypted string back to the user.
+This document contains a complete, line-by-line logical explanation of your renovated **Secure File Vault** project. This is designed to be easily understandable so you can confidently explain it during your placement interviews!
 
 ---
 
-## 1. The Security Engine: `encrypt.cpp`
-This C++ program handles the logic. It takes `text` and `key` as inputs and outputs the encrypted hex string.
+## 1. The Security Engine: `crypto.cpp`
+This is the core of the vault. It handles both locking (encrypting) and unlocking (decrypting) the files securely without relying on Node.js processing power.
 
-### 📝 Full Code
 ```cpp
 #include <iostream>
 #include <string>
 #include <vector>
 #include <sstream>
 #include <iomanip>
+#include <cstdlib>
+```
+* **Explanation**: These are the standard C++ libraries we need. `iostream` handles input/output so Node.js can read the result, `string` lets us work with text easily, `sstream` and `iomanip` are specialized tools used to safely convert scrambled letters into Hexadecimal numbers.
 
-// Function: XOR Encryption
-std::string encryptXOR(std::string text, std::string key) {
+```cpp
+std::string cipherXOR(std::string text, std::string key) {
     std::string result = "";
+    if (key.length() == 0) return text;
+```
+* **Explanation**: This function performs the **Symmetric XOR Cipher**. It takes your `text` and your secret `key` (password). The beauty of XOR is its mathematical symmetry: if you run the exact same function twice with the same key, it decrypts itself back to the original text!
+
+```cpp
     for (size_t i = 0; i < text.length(); i++) {
         char textChar = text[i];
         char keyChar = key[i % key.length()];
-        char encryptedChar = textChar ^ keyChar; // The core Logic
+        char encryptedChar = textChar ^ keyChar; // The Core Logic
         result += encryptedChar;
     }
     return result;
 }
+```
+* **Explanation**: We loop through every single letter of the text. `key[i % key.length()]` ensures that if our password is shorter than our text, the password naturally wraps around and repeats itself. The `^` symbol is the actual C++ Math XOR operator that scrambles the binary values of the letters.
 
-// Function: Convert to Hexadecimal for safe storage
+```cpp
 std::string toHex(std::string text) {
     std::stringstream ss;
     for (unsigned char c : text) {
@@ -44,148 +44,162 @@ std::string toHex(std::string text) {
     }
     return ss.str();
 }
+```
+* **Explanation**: When you XOR text, the result is often weird, unprintable computer system symbols (like `ESC` or `NULL`). If you try to save these weird symbols directly into a PostgreSQL database, the database will crash or truncate the data. `toHex` converts those weird symbols into safe, standard numbers and letters (e.g., the symbol `A` becomes `41`).
 
+```cpp
+std::string fromHex(std::string hexText) {
+    std::string result = "";    
+    for (size_t i = 0; i < hexText.length(); i += 2) {
+        std::string byteString = hexText.substr(i, 2);
+        char byte = (char) strtol(byteString.c_str(), NULL, 16);
+        result += byte;
+    }
+    return result;
+}
+```
+* **Explanation**: This is the reverse of the Hex encoding function. When we pull the safe Hex string out of the database, we need to mathematically convert it back into the unprintable symbols *before* we can XOR decrypt it. Because Hex uses two characters per byte, `i += 2` jumps two characters at a time.
+
+```cpp
 int main(int argc, char* argv[]) {
-    if (argc < 3) {
-        std::cerr << "Usage: encrypt.exe <text> <key>" << std::endl;
+    if (argc < 4) {
+        std::cerr << "Usage: crypto.exe <encrypt|decrypt> <text> <key>" << std::endl;
         return 1;
     }
-    std::string input_text = argv[1];
-    std::string secret_key = argv[2];
+    
+    std::string mode = argv[1];
+    std::string input_text = argv[2];
+    std::string secret_key = argv[3];
+```
+* **Explanation**: The `main` function executes when Node.js calls this program mechanically. `argc` checks if we provided enough arguments. It expects 3 exact string arguments from Node: The `mode` ("encrypt" or "decrypt"), the `input_text`, and the `secret_key`.
 
-    std::string raw_encrypted = encryptXOR(input_text, secret_key);
-    std::string safe_output = toHex(raw_encrypted);
-
-    std::cout << safe_output;
+```cpp
+    if (mode == "encrypt") {
+        std::string raw_encrypted = cipherXOR(input_text, secret_key);
+        std::string safe_output = toHex(raw_encrypted);
+        std::cout << safe_output;
+    } else if (mode == "decrypt") {
+        std::string raw_decrypted = fromHex(input_text);
+        std::string plaintext_output = cipherXOR(raw_decrypted, secret_key);
+        std::cout << plaintext_output;
+    }
     return 0;
 }
 ```
-
-### 🔍 Explanation
--   `encryptXOR`: Loops through the text. The `^` operator (XOR) mixes each letter with a letter from the key. If you XOR it again with the same key, it decrypts!
--   `key[i % key.length()]`: If the key is shorter than the text, this "wraps around" to reuse the key from the beginning.
--   `toHex`: Encryption can create unreadable symbols that break databases. This function converts them into safe numbers and letters (e.g., `A` -> `41`).
--   `argc < 3`: Ensures the program was called with both "Text" and "Key".
+* **Explanation**: If Node.js passes the `"encrypt"` mode, we XOR it and then Hex-encode it. If Node.js passes `"decrypt"`, we reverse the mechanical process: Hex-decode it first, then XOR it back to normal plaintext text! We print the final result via `std::cout`, which Node.js automatically reads through its `stdout` stream.
 
 ---
 
-## 2. The Brain: `server.js`
-The Node.js server acts as the middleman between the User, C++, and Database.
+## 2. The API Coordinator: `server.js`
+This file acts as the intelligent bridge connecting your Frontend Web Dashboard, your background C++ Cryptography Engine, and your persistent PostgreSQL Database.
 
-### 📝 Full Code
 ```javascript
 const express = require('express');
 const { execFile } = require('child_process');
 const { Client } = require('pg');
-const cors = require('cors');
-require('dotenv').config();
+```
+* **Explanation**: `express` bootstraps and runs our REST API web server. `child_process.execFile` allows Node.js to safely spawn and execute our C++ program. `pg` natively connects us to PostgreSQL to run queries.
 
-const app = express();
-const port = process.env.PORT || 3000;
-
-const dbConfig = {
-    user: process.env.DB_USER,
-    host: process.env.DB_HOST,
-    database: process.env.DB_NAME,
-    password: process.env.DB_PASSWORD,
-    port: process.env.DB_PORT,
-};
-
+```javascript
 const client = new Client(dbConfig);
-client.connect().then(() => console.log('Connected to PostgreSQL'));
+client.connect()
+    .then(() => console.log('Connected to PostgreSQL'))
+```
+* **Explanation**: Using the environment variables safely hidden in your `.env` file, Node.js establishes a continuous TCP connection to PostgreSQL so we can save and retrieve vaulted data at will.
 
-app.use(express.static('public'));
-app.use(express.json());
-app.use(cors());
-
+```javascript
 app.post('/save', (req, res) => {
     const { filename, text } = req.body;
-    if (!text || !filename) return res.status(400).json({ error: 'Missing data' });
-
     const secretKey = process.env.ENCRYPTION_KEY || "default_placement_key";
-    const program = 'encrypt.exe';
-    
-    // Pass arguments as an array for security
-    const args = [text, secretKey]; 
+    const args = ['encrypt', text, secretKey];
+```
+* **Explanation**: This is the `/save` endpoint triggered when you click "Secure & Save" on the frontend. It extracts the raw filename and text, grabs your global master password from the `.env` file securely, and arrays the arguments to run the C++ program in `"encrypt"` mode.
 
-    execFile(program, args, (error, stdout, stderr) => {
-        if (error) {
-            console.error("Execution Error:", stderr);
-            return res.status(500).json({ error: 'Encryption failed' });
-        }
-
+```javascript
+    execFile('crypto.exe', args, (error, stdout, stderr) => {
         const encryptedText = stdout.trim();
+```
+* **Explanation**: `execFile` securely executes the compiled C++ binary. It mechanically waits and catches everything C++ printed (`std::cout`) and stores it perfectly in the `stdout` variable. `stdout.trim()` removes any accidental newlines, giving us the safely encrypted Hexadecimal string!
+
+```javascript
         const query = 'INSERT INTO secrets (original_filename, encrypted_content) VALUES ($1, $2) RETURNING *';
         const values = [filename, encryptedText];
-
         client.query(query, values)
             .then(dbRes => res.json({ message: 'Saved successfully!', data: dbRes.rows[0] }))
-            .catch(e => res.status(500).json({ error: 'Database error' }));
-    });
-});
-
-app.listen(port, () => console.log(`Server running at http://localhost:${port}`));
 ```
+* **Explanation**: We instruct PostgreSQL to insert the filename and the encrypted Hex string. We mathematically map the variables using `$1` and `$2` (Parameterized Queries), which fundamentally prevents **SQL Injection** hacking vulnerabilities by ensuring the database treats our text rigidly as data, never as commands.
 
-### 🔍 Explanation
--   `execFile`: A securely explicit way to run external programs. It avoids using the system shell (`cmd.exe`), preventing hackers from running their own commands.
--   `args = [text, secretKey]`: Arguments are passed as an array, ensuring spaces or special characters in the text don't confuse the system.
--   `process.env.ENCRYPTION_KEY`: The secret password used for encryption is stored in the `.env` file, keeping it out of the source code.
--   `client.query(query, values)`: Uses "Formatted Values" (`$1`, `$2`) to insert data into PostgreSQL. This prevents **SQL Injection** attacks.
+```javascript
+app.post('/decrypt', (req, res) => {
+    const { id } = req.body;
+    client.query('SELECT encrypted_content FROM secrets WHERE id = $1', [id])
+```
+* **Explanation**: This endpoint handles safely unlocking a file mechanically. The client specifically requests decryption for an `id`. Node.js securely isolates and queries that specific exact record in the PostgreSQL database table to grab its `encrypted_content`.
+
+```javascript
+        .then(dbRes => {
+            const encryptedHex = dbRes.rows[0].encrypted_content;
+            execFile('crypto.exe', ['decrypt', encryptedHex, secretKey], (error, stdout, stderr) => {
+                res.json({ decrypted_content: stdout.trim() });
+            });
+        })
+```
+* **Explanation**: Once the exact hexadecimal string is retrieved from the database, Node initiates the C++ binary again—but this time safely passing the mode `"decrypt"`. The C++ program does the reversing mathematics, prints the plain text into `stdout`, and Node safely forwards it to your frontend web browser as JSON.
 
 ---
 
-## 3. The Face: `public/index.html`
-The simple user interface.
+## 3. The Dashboard Interface: `public/index.html`
+This is your modern, beautifully crafted Glassmorphism frontend that talks to the Node.js server using asynchronous HTTP requests.
 
-### 📝 Full Code
-```html
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Secure File Vault</title>
-    <style>
-        body { font-family: sans-serif; padding: 20px; max-width: 600px; margin: auto; }
-        input, textarea { width: 100%; margin-bottom: 10px; padding: 8px; }
-        button { padding: 10px 20px; background-color: #28a745; color: white; border: none; cursor: pointer; }
-        #output { margin-top: 20px; color: #333; }
-    </style>
-</head>
-<body>
-    <h1>Secure File Vault 🔒</h1>
-    <label>Filename:</label>
-    <input type="text" id="filename" placeholder="e.g., secret.txt">
-    <label>Secret Content:</label>
-    <textarea id="content" rows="4"></textarea>
-    <button onclick="saveSecret()">Secure Save</button>
-    <div id="output"></div>
-
-    <script>
-        async function saveSecret() {
-            const filename = document.getElementById('filename').value;
-            const text = document.getElementById('content').value;
-            
-            const response = await fetch('/save', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ filename, text })
-            });
-
-            const result = await response.json();
-            if (response.ok) {
-                document.getElementById('output').innerHTML = 
-                    `<p style="color: green;">✅ Success! Encrypted: <strong>${result.data.encrypted_content}</strong></p>`;
-            } else {
-                document.getElementById('output').innerHTML = `<p style="color: red;">❌ Error: ${result.error}</p>`;
-            }
-        }
-    </script>
-</body>
-</html>
+```javascript
+async function fetchSecrets() {
+    const response = await fetch('/secrets');
+    const result = await response.json();
 ```
+* **Explanation**: Triggered seamlessly when the page loads. The `fetch` API is highly modern JavaScript. It reaches out to our `/secrets` endpoint and waits (`await`) mechanically for the server to reply with the list of all vaulted files in the database.
 
-### 🔍 Explanation
--   `fetch('/save', ...)`: Sends the data (filename and text) to our backend API via a POST request.
--   `JSON.stringify(...)`: Converts the JavaScript object data into a JSON string standard format for sending over the web.
--   `async/await`: Allows the browser to wait for the server's response without freezing the page.
+```javascript
+    result.data.forEach(secret => {
+        const item = document.createElement('div');
+        item.className = 'secret-item';
+        item.innerHTML = `
+            <span class="secret-name">📄 ${secret.original_filename}</span>
+            <span class="secret-id">ID: ${secret.id}</span>
+        `;
+        item.onclick = () => decryptSecret(secret.id, item);
+        vaultList.appendChild(item);
+    });
+}
+```
+* **Explanation**: For every historical vault operation our API returns, the browser synthetically generates a new visual HTML container (`secret-item`). It sets up an `onclick` event listener so that when manually clicked, it instantly initiates the unlocking sequence `decryptSecret()` tailored automatically to that file's Database `ID`.
+
+```javascript
+async function decryptSecret(id, element) {
+    const response = await fetch('/decrypt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id })
+    });
+    const result = await response.json();
+```
+* **Explanation**: When interacting with the file on the dashboard interface, this function securely bundles the `id` of that file into a structured JSON string and dynamically `POST`s it to the `/decrypt` Node.js route to challenge the server for the unencrypted content.
+
+```javascript
+    const view = document.createElement('div');
+    view.className = 'decrypted-view';
+    view.style.display = 'block';
+    view.innerHTML = `
+        <h3>🔓 Unlocked Content</h3>
+        <div class="decrypted-content">${result.decrypted_content}</div>
+    `;
+    element.after(view);
+}
+```
+* **Explanation**: Successfully verified! The securely retrieved unencrypted plaintext from the server allows the browser to synthetically inject a brand new graphical green container (`decrypted-view`) via DOM manipulation exactly `after` the file you clicked, beautifully revealing the historical classified information live on screen effortlessly!
+
+---
+
+### 💡 Interview Tip: "The Polyglot Architecture"
+If an interviewer asks, *"Why didn't you just write the encryption directly in JavaScript / Node.js?"*, you can confidently deliver this high-level technical answer:  
+
+*"I intentionally designed this as a **polyglot microservices architecture** to separate algorithmic concerns. Because cryptographic mathematical operations are highly CPU-intensive, crunching them synchronously inside Node.js strictly blocks its single-threaded event loop, which immediately freezes up the web server for all other users. By offloading these rigorous encryption calculations strictly to an external child executable written in a low-level, high-performance compiled language like C++, the Node web server maintains its highly concurrent, non-blocking asynchronous efficiency for serving REST requests, while C++ seamlessly handles the heavy algorithmic lifting natively in the background."*

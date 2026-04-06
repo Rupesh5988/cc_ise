@@ -1,43 +1,54 @@
-# Secure File Vault 🔒
+# 🛡️ Secure File Vault
 
-A simple project demonstrating how to connect a Frontend, Node.js Backend, C++ Logic, and PostgreSQL Database.
+A modern, full-stack application demonstrating how to connect a visually stunning Frontend, a Node.js Backend, a bidirectional C++ Cryptography Engine, and a PostgreSQL Database. Perfect for learning backend integrations and showcasing robust security architectures in placements/interviews.
+
+## ✨ Features
+- **Modern Glassmorphism UI**: A beautiful, dark-themed responsive dashboard utilizing Vanilla CSS.
+- **Bidirectional C++ Engine**: Custom XOR encryption and Hex-encoding/decoding engine written entirely in C++.
+- **RESTful Node.js Backend**: Secure Express integration utilizing `child_process.execFile`.
+- **PostgreSQL Database**: Safe, injection-proof storage of hexadecimal ciphertexts.
 
 ## 📂 Project Structure
-- `encrypt.cpp` - The C++ program that performs the encryption.
-- `server.js` - The Node.js server that handles requests.
-- `db.sql` - SQL script to create the database table.
-- `public/index.html` - The frontend user interface.
+- `crypto.cpp` - The C++ engine handling bidirectional encryption & decryption.
+- `server.js` - Node.js Express server orchestrating the flows.
+- `db.sql` - SQL script to initialize the PostgreSQL table.
+- `public/index.html` - The Glassmorphism user interface.
 
 ## 🚀 Setup & Run Instructions
 
 ### 1. Database Setup
-1. Open **pgAdmin** or your PostgreSQL command line.
-2. Create a new database (e.g., `vault_db`) or use an existing one.
-3. Open the Query Tool and paste the content of `db.sql` to create the table.
-4. **IMPORTANT:** Open `server.js` and update the `dbConfig` object with your actual PostgreSQL password!
+1. Open **pgAdmin** or your PostgreSQL CLI.
+2. Create a new database (e.g., `vault_db`).
+3. Run the content of `db.sql` to create the `secrets` table.
+4. **Configuration**: Ensure you have a `.env` file in the root based on your PostgreSQL setup:
+   ```env
+   DB_USER=postgres
+   DB_HOST=localhost
+   DB_NAME=vault_db
+   DB_PASSWORD=your_password
+   DB_PORT=5432
+   ENCRYPTION_KEY=super_secret_master_key
+   ```
 
-### 2. Compile the C++ Program
-Open a terminal in this folder and run:
+### 2. Compile the C++ Engine
+Open a terminal in this folder and compile the C++ cryptographic engine:
 ```sh
-g++ encrypt.cpp -o encrypt.exe
+g++ crypto.cpp -o crypto.exe
 ```
-*(If you don't have `g++`, install MinGW or use another C++ compiler)*
 
-### 3. Install Dependencies
-Run this command to install the required Node.js libraries:
+### 3. Install NPM Dependencies
+If you haven't already:
 ```sh
 npm install
 ```
 
 ### 4. Start the Server
-Run the server with:
 ```sh
 node server.js
 ```
-You should see: `Server running at http://localhost:3000`
+*You should see: `Server running at http://localhost:3000`*
 
-### 5. Use the App
-1. Open your browser and go to `http://localhost:3000`.
-2. Enter a filename and some secret text.
-3. Click **Secure Save**.
-4. Check your database to see the encrypted content!
+### 5. Launch the Vault
+1. Open your browser and navigate to `http://localhost:3000`.
+2. **Vault a File**: Enter a filename, some classified information, and click "Secure & Save to Vault".
+3. **Access Vault**: Click on any historically vaulted file in the dashboard to decrypt and view it live on screen!
